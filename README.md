@@ -11,18 +11,10 @@
 
 follow original `nvblox-isaac-ros` [readme](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_nvblox/blob/main/README.md) to setup project.
 
-Assuming camera connected to your laptop, launch the SLAM and mapping (cuvslam and nvblox):
+To send a nav_goal, since nav2 publishes to a locla topic on your laptop, we need to forward it to rena robot. To do so we can use CycloneDDS to forward all topics from / to rena robot to / from our laptop (make sure you update the ip addresses in the following command):
 
 ```bash
-# on laptop
-ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam num_cameras:=1 camera_serial_numbers:=<camera_serial_numbers> run_realsense:=True navigation:=True
-```
-
-## Fast_LIO
-
-Since CuVSLAM does not yield accurate Odometry, one can run nvblox with FAST_LIO. First we need to forwar topics from rena robot to our laptop (make sure you update the ip addresses in the following command):
-
-```bash
+# on both laptop and rena robot
 mkdir -p ~/.cyclonedds && cat > ~/.cyclonedds/rena_robot.office.xml << 'EOF'
 <?xml version="1.0" encoding="UTF-8" ?>
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
@@ -54,6 +46,22 @@ mkdir -p ~/.cyclonedds && cat > ~/.cyclonedds/rena_robot.office.xml << 'EOF'
 </CycloneDDS>
 EOF
 ```
+
+Assuming camera connected to your laptop, launch the SLAM and mapping (cuvslam and nvblox):
+
+```bash
+# on rena robot, launch hardware
+export ROS_DOMAIN_ID=42
+ros2 launch rena_bringup rena_base_hardware.launch.py robot_id:=<robot-id
+
+# on laptop
+export ROS_DOMAIN_ID=42
+ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam num_cameras:=1 camera_serial_numbers:=<camera_serial_numbers> run_realsense:=True navigation:=True
+```
+
+## Fast_LIO
+
+Since CuVSLAM does not yield accurate Odometry, one can run nvblox with FAST_LIO. 
 
 
 ```bash
