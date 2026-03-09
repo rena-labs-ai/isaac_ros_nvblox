@@ -20,20 +20,7 @@ ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam nu
 
 ## Fast_LIO
 
-Since CuVSLAM does not yield accurate Odometry, one can run nvblox with FAST_LIO:
-
-```bash
-# on rena robot, make sure hardware is already launched
-ros2 launch rena_navigation fast_lio.launch.py
-# on laptop, make sure /Odometry topic is published
-ros2 topic list | grep Odometry
-# on laptop
-ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=fast_lio num_cameras:=1 camera_serial_numbers:=<camera_serial_numbers> run_realsense:=True navigation:=True
-```
-
-## Camera Connected to Rena Robot
-
-One can connect cameras to Rena robot. We need to be able to see camera topics on our laptop (make sure you update the ip addresses in the following command):
+Since CuVSLAM does not yield accurate Odometry, one can run nvblox with FAST_LIO. First we need to forwar topics from rena robot to our laptop (make sure you update the ip addresses in the following command):
 
 ```bash
 mkdir -p ~/.cyclonedds && cat > ~/.cyclonedds/rena_robot.office.xml << 'EOF'
@@ -68,12 +55,27 @@ mkdir -p ~/.cyclonedds && cat > ~/.cyclonedds/rena_robot.office.xml << 'EOF'
 EOF
 ```
 
-On Rena robot create this [camera launch file](nvblox_examples/nvblox_examples_bringup/launch/multicam.launch.py) (in rena_bringup directory), launch it, and make sure you can see camera topics on your laptop:
+
+```bash
+# on rena robot, make sure hardware is already launched
+export ROS_DOMAIN_ID=42
+ros2 launch rena_navigation fast_lio.launch.py
+# on laptop, make sure /Odometry topic is published
+export ROS_DOMAIN_ID=42
+ros2 topic list | grep Odometry
+ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=fast_lio num_cameras:=1 camera_serial_numbers:=<camera_serial_numbers> run_realsense:=True navigation:=True
+```
+
+## Camera Connected to Rena Robot (TODO)
+
+One can connect cameras to Rena robot. We need to be able to see camera topics on our laptop. On Rena robot create this [camera launch file](nvblox_examples/nvblox_examples_bringup/launch/multicam.launch.py) (in rena_bringup directory), launch it, and make sure you can see camera topics on your laptop:
 
 ```bash
 # on rena robot
+export ROS_DOMAIN_ID=42
 ros2 launch rena_bringup multicam.launch.py camera_serials:=<camera_serial_numbers>
 # on laptop
+export ROS_DOMAIN_ID=42
 ros2 topic list | grep camera
 ```
 
@@ -81,5 +83,6 @@ Finally run SLAM and mapping:
 
 ```bash
 # on laptop
+export ROS_DOMAIN_ID=42
 ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam num_cameras:=1 camera_serial_numbers:=<camera_serial_numbers> run_realsense:=False navigation:=True
 ```
