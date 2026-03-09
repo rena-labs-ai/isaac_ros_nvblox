@@ -48,6 +48,11 @@ def generate_launch_description() -> LaunchDescription:
         description='The nvblox mode.',
         cli=True)
     args.add_arg(
+        'navigation',
+        True,
+        description='Whether to enable nav2 for navigation.',
+        cli=True)
+    args.add_arg(
         'people_segmentation',
         default=NvbloxPeopleSegmentation.peoplesemsegnet_vanilla,
         choices=[
@@ -74,11 +79,29 @@ def generate_launch_description() -> LaunchDescription:
         True,
         description='Disable visualization of bandwidth-heavy topics',
         cli=True)
+    args.add_arg(
+        'slam',
+        'cuvslam',
+        choices=['cuvslam', 'fast_lio'],
+        description='SLAM backend to use.',
+        cli=True)
     actions = args.get_launch_actions()
 
     # Globally set use_sim_time if we're running from bag or sim
     actions.append(
         SetParameter('use_sim_time', True, condition=IfCondition(lu.is_valid(args.rosbag))))
+
+    # Navigation
+    # NOTE: needs to be called before the component container because it modifies params globally
+    actions.append(
+        lu.include(
+            'nvblox_examples_bringup',
+            'launch/navigation/nvblox_carter_navigation.launch.py',
+            launch_arguments={
+                'container_name': args.container_name,
+                'mode': args.mode,
+            },
+            condition=IfCondition(lu.is_true(args.navigation))))
 
     # Single or Multi-realsense
     is_multi_cam = UnlessCondition(lu.is_equal(args.num_cameras, '1'))
@@ -108,7 +131,7 @@ def generate_launch_description() -> LaunchDescription:
             },
             condition=run_rs_driver))
 
-    # Visual SLAM
+    # Visual SLAM (cuVSLAM)
     actions.append(
         lu.include(
             'nvblox_examples_bringup',
@@ -117,9 +140,18 @@ def generate_launch_description() -> LaunchDescription:
                 'container_name': args.container_name,
                 'camera': camera_mode,
             },
-            # Delay for 1 second to make sure that the static topics from the rosbag are published.
             delay=1.0,
+            condition=IfCondition(lu.is_equal(args.slam, 'cuvslam')),
         ))
+
+    # SLAM (FAST-LIO)
+    actions.append(
+        lu.include(
+            'nvblox_examples_bringup',
+            'launch/perception/fast_lio.launch.py',
+            condition=IfCondition(lu.is_equal(args.slam, 'fast_lio')),
+        ))
+
     # People detection for multi-RS
     camera_namespaces = ['camera0', 'camera1', 'camera2', 'camera3']
     camera_input_topics = []

@@ -27,9 +27,9 @@ from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 def add_nvblox_carter_navigation(args: lu.ArgumentContainer) -> List[lut.Action]:
     # Nav2 base parameter file
     actions = []
-    nav_params_path = lu.get_path('nvblox_examples_bringup', 'config/navigation/carter_nav2.yaml')
+    nav_params_path = lu.get_path('nvblox_examples_bringup', 'config/navigation/rena_nav2.yaml')
     actions.append(lut.SetParametersFromFile(str(nav_params_path)))
-    actions.append(lut.SetParameter('use_sim_time', True))
+    actions.append(lut.SetParameter('use_sim_time', False))
     # Enabling nav2
     actions.append(
         lu.set_parameter(
@@ -75,10 +75,18 @@ def add_nvblox_carter_navigation(args: lu.ArgumentContainer) -> List[lut.Action]
                 'params_file': str(nav_params_path),
                 'container_name': args.container_name,
                 'use_composition': 'True',
-                'use_sim_time': 'True',
+                'use_sim_time': 'False',
             },
         ))
     actions.append(lu.static_transform('map', 'odom'))
+
+    actions.append(
+        lut.Node(
+            package='nvblox_examples_bringup',
+            executable='cmd_vel_relay.py',
+            name='cmd_vel_relay',
+            output='screen',
+        ))
 
     return actions
 

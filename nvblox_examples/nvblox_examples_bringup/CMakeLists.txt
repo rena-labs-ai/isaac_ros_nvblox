@@ -25,6 +25,11 @@ ament_auto_find_build_dependencies()
 install(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME})
 
+install(PROGRAMS
+  scripts/fast_lio_tf_bridge.py
+  scripts/cmd_vel_relay.py
+  DESTINATION lib/${PROJECT_NAME})
+
 if(BUILD_TESTING)
   find_package(isaac_ros_test_cmake)
   find_package(ament_cmake_copyright REQUIRED)

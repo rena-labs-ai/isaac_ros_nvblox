@@ -1,8 +1,8 @@
 bt_navigator:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     global_frame: map
-    robot_base_frame: base_link
+    robot_base_frame: nvblox_base_link
     bt_loop_duration: 10
     default_server_timeout: 20
     navigators: ['navigate_to_pose', 'navigate_through_poses']
@@ -12,14 +12,14 @@ bt_navigator:
       plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
 bt_navigator_navigate_through_poses_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 bt_navigator_navigate_to_pose_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 collision_monitor:
   ros__parameters:
     enabled: True
-    base_frame_id: "base_link"
+    base_frame_id: "nvblox_base_link"
     odom_frame_id: "odom"
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
@@ -38,7 +38,7 @@ collision_monitor:
       enabled: True
 controller_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     controller_frequency: 20.0
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["stopped_goal_checker"]
@@ -136,7 +136,7 @@ controller_server:
         #   twirling_cost_weight: 10.0
 docking_server:
   ros__parameters:
-    base_frame: "base_link"
+    base_frame: "nvblox_base_link"
     fixed_frame: "odom"
     dock_plugins: ['nova_carter_dock']
     nova_carter_dock:
@@ -154,7 +154,7 @@ local_costmap:
       update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: odom
-      robot_base_frame: base_link
+      robot_base_frame: nvblox_base_link
       rolling_window: true
       width: 6
       height: 6
@@ -181,9 +181,9 @@ global_costmap:
       footprint_padding: 0.0
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: map
-      robot_base_frame: base_link
-      use_sim_time: True
+      global_frame: odom
+      robot_base_frame: nvblox_base_link
+      use_sim_time: False
       footprint: "[ [0.14, 0.25], [0.14, -0.25], [-0.607, -0.25], [-0.607, 0.25] ]"
       resolution: 0.05
       # The following is only used as a default when no map is specified.
@@ -193,7 +193,7 @@ global_costmap:
       origin_y: -30.0
       track_unknown_space: False
       mark_threshold: 2
-      always_send_full_costmap: False
+      always_send_full_costmap: True
       plugins: ['nvblox_layer', 'inflation_layer']
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -208,13 +208,13 @@ global_costmap:
         convert_to_binary_costmap: True
 map_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     # Overridden in launch by the "map" launch configuration or provided default value.
     # To use in yaml, remove the default "map" value in the tb3_simulation_launch.py file & provide full path to map below.
     yaml_filename: ""
 map_saver:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     save_map_timeout: 5.0
     free_thresh_default: 0.25
     occupied_thresh_default: 0.65
@@ -222,7 +222,7 @@ map_saver:
 planner_server:
   ros__parameters:
     expected_planner_frequency: 1.0
-    use_sim_time: True
+    use_sim_time: False
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_smac_planner::SmacPlannerHybrid"
@@ -259,7 +259,7 @@ planner_server:
         refinement_num: 2
 smoother_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     smoother_plugins: ["simple_smoother"]
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
@@ -283,19 +283,19 @@ behavior_server:
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
     global_frame: odom
-    robot_base_frame: base_link
+    robot_base_frame: nvblox_base_link
     transform_tolerance: 0.1
-    use_sim_time: true
+    use_sim_time: false
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
     rotational_acc_lim: 3.2
 robot_state_publisher:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 waypoint_follower:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     loop_rate: 20
     stop_on_failure: false
     waypoint_task_executor_plugin: "wait_at_waypoint"
@@ -305,7 +305,7 @@ waypoint_follower:
       waypoint_pause_duration: 200
 velocity_smoother:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
