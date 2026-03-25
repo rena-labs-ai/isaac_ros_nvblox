@@ -24,34 +24,54 @@ from nvblox_ros_python_utils.nvblox_launch_utils import NvbloxCamera
 from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
 
+def get_realsense_remappings(num_cameras: int) -> list:
+    remappings = []
+    for i in range(num_cameras):
+        remappings.append(
+            (f'visual_slam/camera_info_{2*i}', f'/camera{i}/infra1/camera_info'))
+        remappings.append(
+            (f'visual_slam/camera_info_{2*i+1}', f'/camera{i}/infra2/camera_info'))
+        if i == 0:
+            remappings.append(
+                (f'visual_slam/image_{2*i}',
+                 f'/camera{i}/realsense_splitter_node/output/infra_1'))
+            remappings.append(
+                (f'visual_slam/image_{2*i+1}',
+                 f'/camera{i}/realsense_splitter_node/output/infra_2'))
+        else:
+            remappings.append(
+                (f'visual_slam/image_{2*i}', f'/camera{i}/infra1/image_rect_raw'))
+            remappings.append(
+                (f'visual_slam/image_{2*i+1}', f'/camera{i}/infra2/image_rect_raw'))
+    return remappings
+
+
+def get_realsense_optical_frames(num_cameras: int) -> list:
+    frames = []
+    for i in range(num_cameras):
+        frames.append(f'camera{i}_infra1_optical_frame')
+        frames.append(f'camera{i}_infra2_optical_frame')
+    return frames
+
+
 def add_vslam(args: lu.ArgumentContainer) -> List[Action]:
     actions = []
 
     camera = NvbloxCamera[args.camera]
-    # NOTE(alexmillane, 19.08.2024): At the moment in nvblox_examples we only support a single
-    # camera running cuVSLAM, even in the multi-camera case: we run *nvblox* on multiple
-    # cameras, but cuVSLAM on camera0 only.
-    realsense_remappings = [
-        ('visual_slam/camera_info_0', '/camera0/infra1/camera_info'),
-        ('visual_slam/camera_info_1', '/camera0/infra2/camera_info'),
-        ('visual_slam/image_0', '/camera0/realsense_splitter_node/output/infra_1'),
-        ('visual_slam/image_1', '/camera0/realsense_splitter_node/output/infra_2'),
-        ('visual_slam/imu', 'camera0/imu'),
-    ]
+    num_cameras = int(args.num_cameras)
+    num_images = 2 * num_cameras
 
-    # Base frame: 
-    # - camera0_link for single realsense,
-    # - base_link for everything else (multi realsense)
     if camera is NvbloxCamera.realsense:
         base_frame = 'camera0_link'
     else:
         base_frame = 'base_link'
 
-    actions.append(lu.log_info(f'Starting cuVSLAM with base_frame: {base_frame}'))
+    actions.append(lu.log_info(
+        f'Starting cuVSLAM with {num_cameras} camera(s), base_frame: {base_frame}'))
 
     base_parameters = {
-        'num_cameras': 2,
-        'min_num_images': 2,
+        'num_cameras': num_images,
+        'min_num_images': num_images,
         'enable_localization_n_mapping': False,
         'gyro_noise_density': 0.000244,
         'gyro_random_walk': 0.000019393,
@@ -76,14 +96,11 @@ def add_vslam(args: lu.ArgumentContainer) -> List[Action]:
         'enable_image_denoising': False,
         'rectified_images': True,
         'imu_frame': 'camera0_gyro_optical_frame',
-        'camera_optical_frames': [
-            'camera0_infra1_optical_frame',
-            'camera0_infra2_optical_frame',
-        ],
+        'camera_optical_frames': get_realsense_optical_frames(num_cameras),
     }
 
-    if camera is NvbloxCamera.realsense or NvbloxCamera.multi_realsense:
-        remappings = realsense_remappings
+    if camera is NvbloxCamera.realsense or camera is NvbloxCamera.multi_realsense:
+        remappings = get_realsense_remappings(num_cameras)
         camera_parameters = realsense_parameters
     else:
         raise Exception(f'Camera {camera} not implemented for vslam.')
@@ -112,6 +129,7 @@ def add_vslam(args: lu.ArgumentContainer) -> List[Action]:
 def generate_launch_description() -> LaunchDescription:
     args = lu.ArgumentContainer()
     args.add_arg('camera')
+    args.add_arg('num_cameras', 1)
     args.add_arg(
         'enable_ground_constraint_in_odometry',
         'False',

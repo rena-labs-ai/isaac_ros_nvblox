@@ -56,7 +56,7 @@ ros2 launch rena_bringup rena_base_hardware.launch.py robot_id:=<robot-id
 
 # on laptop
 export ROS_DOMAIN_ID=42
-ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam num_cameras:=1 camera_serial_numbers:=<camera_serial_numbers> run_realsense:=True navigation:=True
+ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam num_cameras:=1 camera_serial_numbers:=<front_camera_serial_number> run_realsense:=True navigation:=True
 ```
 
 ## Fast_LIO
@@ -71,5 +71,15 @@ ros2 launch rena_navigation fast_lio.launch.py
 # on laptop, make sure /Odometry topic is published
 export ROS_DOMAIN_ID=42
 ros2 topic list | grep Odometry
-ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=fast_lio num_cameras:=1 camera_serial_numbers:=<camera_serial_numbers> run_realsense:=True navigation:=True
+ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=fast_lio num_cameras:=1 camera_serial_numbers:=<front_camera_serial_number> run_realsense:=True navigation:=True
+```
+
+## MultiCamera Mode
+
+Given the front-left-right 3D-printed rig, one can use all three cameras for both nvblox and cuVSLAM. It uses realsense builtin emitter-on-off mode to use one frame for nvblox (i.e., rgbd) and next frame for cuVSLAM (i.e., IR):
+
+```bash
+# on laptop
+export ROS_DOMAIN_ID=42
+ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam num_cameras:=3 camera_serial_numbers:=<front_camera_serial_number>,<left_camera_serial_number>,<right_camera_serial_number> run_realsense:=True navigation:=True
 ```

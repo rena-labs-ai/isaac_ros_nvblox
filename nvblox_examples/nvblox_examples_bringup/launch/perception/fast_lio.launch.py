@@ -15,19 +15,33 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from launch import LaunchDescription
-from launch_ros.actions import Node
+from isaac_ros_launch_utils.all_types import *
+import isaac_ros_launch_utils as lu
 
 
 def generate_launch_description() -> LaunchDescription:
-    fast_lio_tf_bridge = Node(
-        package='nvblox_examples_bringup',
-        executable='fast_lio_tf_bridge.py',
-        name='fast_lio_tf_bridge',
-        parameters=[{
-            'odom_frame': 'odom',
-            'child_frame': 'camera0_link',
-        }],
-    )
+    args = lu.ArgumentContainer()
+    args.add_arg(
+        'odom_frame',
+        'odom',
+        description='Parent frame for FAST-LIO odometry TF.',
+        cli=True)
+    args.add_arg(
+        'child_frame',
+        'camera0_link',
+        description='Child frame (e.g. camera0_link for Realsense, zed_camera_link for ZED).',
+        cli=True)
+    actions = args.get_launch_actions()
 
-    return LaunchDescription([fast_lio_tf_bridge])
+    actions.append(
+        Node(
+            package='nvblox_examples_bringup',
+            executable='fast_lio_tf_bridge.py',
+            name='fast_lio_tf_bridge',
+            parameters=[{
+                'odom_frame': args.odom_frame,
+                'child_frame': args.child_frame,
+            }],
+        ))
+
+    return LaunchDescription(actions)

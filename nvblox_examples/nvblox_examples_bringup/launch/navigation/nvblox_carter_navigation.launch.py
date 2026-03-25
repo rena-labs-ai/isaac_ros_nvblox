@@ -23,11 +23,16 @@ import isaac_ros_launch_utils as lu
 from nvblox_ros_python_utils.nvblox_launch_utils import NvbloxMode
 from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
+# Use separate container for Nav2 to avoid overloading nvblox_container (ZED/nvblox)
+# when running navigation launch separately from sensor/mapping launch
+NAV2_CONTAINER_NAME = 'nav2_container'
+
 
 def add_nvblox_carter_navigation(args: lu.ArgumentContainer) -> List[lut.Action]:
     # Nav2 base parameter file
     actions = []
-    nav_params_path = lu.get_path('nvblox_examples_bringup', 'config/navigation/rena_nav2.yaml')
+    nav_config = args.nav_config
+    nav_params_path = lu.get_path('nvblox_examples_bringup', f'config/navigation/{nav_config}')
     actions.append(lut.SetParametersFromFile(str(nav_params_path)))
     actions.append(lut.SetParameter('use_sim_time', False))
     # Enabling nav2
@@ -66,19 +71,23 @@ def add_nvblox_carter_navigation(args: lu.ArgumentContainer) -> List[lut.Action]
             value=costmap_topic_name,
         ))
 
-    # Running carter navigation
+    # Nav2 runs in its own container to avoid overloading nvblox_container when
+    # launched separately (e.g. ZED + nvblox in one terminal, Nav2 in another)
+    actions.append(lu.component_container(NAV2_CONTAINER_NAME))
     actions.append(
         lu.include(
             'nav2_bringup',
             'launch/navigation_launch.py',
             launch_arguments={
                 'params_file': str(nav_params_path),
-                'container_name': args.container_name,
+                'container_name': NAV2_CONTAINER_NAME,
                 'use_composition': 'True',
                 'use_sim_time': 'False',
             },
         ))
-    actions.append(lu.static_transform('map', 'odom'))
+    # ZED publishes map->odom from its SLAM; other configs need static transform
+    if nav_config != 'zed_nav2.yaml':
+        actions.append(lu.static_transform('map', 'odom'))
 
     actions.append(
         lut.Node(
@@ -95,6 +104,10 @@ def generate_launch_description() -> lut.LaunchDescription:
     args = lu.ArgumentContainer()
     args.add_arg('mode')
     args.add_arg('container_name', NVBLOX_CONTAINER_NAME)
+    args.add_arg(
+        'nav_config', 'carter_nav2.yaml',
+        description='Nav2 config file: carter_nav2.yaml, rena_nav2.yaml, or zed_nav2.yaml',
+        cli=True)
 
     args.add_opaque_function(add_nvblox_carter_navigation)
     return lut.LaunchDescription(args.get_launch_actions())

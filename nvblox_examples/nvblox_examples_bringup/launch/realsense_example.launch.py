@@ -38,7 +38,7 @@ def generate_launch_description() -> LaunchDescription:
     args.add_arg(
         'multicam_urdf_path',
         lu.get_path('nvblox_examples_bringup',
-                    'config/urdf/4_realsense_carter_example_calibration.urdf.xacro'),
+                    'config/urdf/rena.urdf.xacro'),
         description='Path to a URDF file describing the camera rig extrinsics. Only used in multicam.',
         cli=True)
     args.add_arg(
@@ -51,6 +51,13 @@ def generate_launch_description() -> LaunchDescription:
         'navigation',
         True,
         description='Whether to enable nav2 for navigation.',
+        cli=True)
+    args.add_arg(
+        'nav_config',
+        'rena_nav2.yaml',
+        description=(
+            'Nav2 params file under config/navigation (e.g. rena_nav2.yaml for '
+            'RealSense+cuVSLAM / camera0_link; carter_nav2.yaml for nvblox_base_link).'),
         cli=True)
     args.add_arg(
         'people_segmentation',
@@ -71,9 +78,9 @@ def generate_launch_description() -> LaunchDescription:
         NVBLOX_CONTAINER_NAME,
         description='Name of the component container.')
     args.add_arg(
-        'run_realsense',
+        'run_realsense_driver',
         'True',
-        description='Launch Realsense drivers')
+        description='Launch Realsense drivers. Set False when drivers run externally (e.g. on robot).')
     args.add_arg(
         'use_foxglove_whitelist',
         True,
@@ -100,6 +107,7 @@ def generate_launch_description() -> LaunchDescription:
             launch_arguments={
                 'container_name': args.container_name,
                 'mode': args.mode,
+                'nav_config': args.nav_config,
             },
             condition=IfCondition(lu.is_true(args.navigation))))
 
@@ -117,9 +125,10 @@ def generate_launch_description() -> LaunchDescription:
             IfCondition(PythonExpression(['int("', args.num_cameras, '") > 4']))),
     )
 
-    run_rs_driver = UnlessCondition(
-        OrSubstitution(lu.is_valid(args.rosbag), lu.is_false(args.run_realsense)))
-    # Realsense
+    run_driver = lu.if_else_substitution(
+        OrSubstitution(lu.is_valid(args.rosbag), lu.is_false(args.run_realsense_driver)),
+        'False', 'True')
+    # Realsense (splitter always runs; driver is conditional)
     actions.append(
         lu.include(
             'nvblox_examples_bringup',
@@ -128,8 +137,8 @@ def generate_launch_description() -> LaunchDescription:
                 'container_name': args.container_name,
                 'camera_serial_numbers': args.camera_serial_numbers,
                 'num_cameras': args.num_cameras,
-            },
-            condition=run_rs_driver))
+                'run_driver': run_driver,
+            }))
 
     # Visual SLAM (cuVSLAM)
     actions.append(
@@ -139,6 +148,7 @@ def generate_launch_description() -> LaunchDescription:
             launch_arguments={
                 'container_name': args.container_name,
                 'camera': camera_mode,
+                'num_cameras': args.num_cameras,
             },
             delay=1.0,
             condition=IfCondition(lu.is_equal(args.slam, 'cuvslam')),
@@ -153,7 +163,7 @@ def generate_launch_description() -> LaunchDescription:
         ))
 
     # People detection for multi-RS
-    camera_namespaces = ['camera0', 'camera1', 'camera2', 'camera3']
+    camera_namespaces = ['camera0', 'camera1', 'camera2']
     camera_input_topics = []
     input_camera_info_topics= []
     output_resized_image_topics = []
@@ -210,18 +220,18 @@ def generate_launch_description() -> LaunchDescription:
                 'num_cameras': args.num_cameras,
             }))
 
-    # TF transforms for multi-realsense
-    actions.append(
-        lu.add_robot_description(robot_calibration_path=args.multicam_urdf_path,
-                                 condition=is_multi_cam)
-    )
+    # # TF transforms for multi-realsense
+    # actions.append(
+    #     lu.add_robot_description(robot_calibration_path=args.multicam_urdf_path,
+    #                              condition=is_multi_cam)
+    # )
 
-    # Play ros2bag
-    actions.append(
-        lu.play_rosbag(
-            bag_path=args.rosbag,
-            additional_bag_play_args=args.rosbag_args,
-            condition=IfCondition(lu.is_valid(args.rosbag))))
+    # # Play ros2bag
+    # actions.append(
+    #     lu.play_rosbag(
+    #         bag_path=args.rosbag,
+    #         additional_bag_play_args=args.rosbag_args,
+    #         condition=IfCondition(lu.is_valid(args.rosbag))))
 
     # Visualization
     actions.append(

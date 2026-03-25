@@ -44,53 +44,53 @@ def get_isaac_sim_remappings(mode: NvbloxMode, num_cameras: int,
     return remappings
 
 
-def get_realsense_remappings(mode: NvbloxMode, num_cameras: int = 1) -> List[Tuple[str, str]]:
-    # NOTE(xinjieyao, 04.09.2024): Current in this function we only support:
-    # - On/off emitter flashing + realsense_splitter on camera_0 (front camera).
-    # - (Optional) people segmentation on all cameras.
-    # - (Optional) people detection on all cameras.
+def get_realsense_remappings(mode: NvbloxMode) -> List[Tuple[str, str]]:
+    # Nvblox only uses the front camera (camera0) which runs the realsense_splitter.
+    # Other cameras feed cuVSLAM only.
+    remappings = [
+        ('camera_0/depth/image', '/camera0/realsense_splitter_node/output/depth'),
+        ('camera_0/depth/camera_info', '/camera0/depth/camera_info'),
+    ]
 
-    remappings = []
-    for i in range(0, num_cameras):
-        if i == 0:
-            # Only cam0 (i == 0) runs splitter.
-            remappings.append(
-                (f'camera_{i}/depth/image', f'/camera{i}/realsense_splitter_node/output/depth'))
-            remappings.append((f'camera_{i}/depth/camera_info', f'/camera{i}/depth/camera_info'))
-        else:
-            remappings.append((f'camera_{i}/depth/image', f'/camera{i}/depth/image_rect_raw'))
-            remappings.append((f'camera_{i}/depth/camera_info', f'/camera{i}/depth/camera_info'))
+    if mode is NvbloxMode.people_segmentation:
+        remappings.append(('camera_0/color/image', '/camera0/segmentation/image_resized'))
+        remappings.append(
+            ('camera_0/color/camera_info', '/camera0/segmentation/camera_info_resized'))
+        remappings.append(('camera_0/mask/image', '/camera0/segmentation/people_mask'))
+        remappings.append(
+            ('camera_0/mask/camera_info', '/camera0/segmentation/camera_info_resized'))
+    else:
+        remappings.append(('camera_0/color/image', '/camera0/color/image_raw'))
+        remappings.append(('camera_0/color/camera_info', '/camera0/color/camera_info'))
 
-        if mode is NvbloxMode.people_segmentation:
-            # nvblox takes resized images from semseg inputs
-            remappings.append(
-                (f'camera_{i}/color/image', f'/camera{i}/segmentation/image_resized'))
-            remappings.append(
-                (f'camera_{i}/color/camera_info', f'/camera{i}/segmentation/camera_info_resized'))
-            remappings.append((f'camera_{i}/mask/image', f'/camera{i}/segmentation/people_mask'))
-            remappings.append(
-                (f'camera_{i}/mask/camera_info', f'/camera{i}/segmentation/camera_info_resized'))
-
-        else:
-            remappings.append((f'camera_{i}/color/image', f'/camera{i}/color/image_raw'))
-            remappings.append((f'camera_{i}/color/camera_info', f'/camera{i}/color/camera_info'))
-
-            if mode is NvbloxMode.people_detection:
-                remappings.append((f'camera_{i}/mask/image', f'/camera{i}/detection/people_mask'))
-                remappings.append(
-                    (f'camera_{i}/mask/camera_info', f'/camera{i}/color/camera_info'))
+        if mode is NvbloxMode.people_detection:
+            remappings.append(('camera_0/mask/image', '/camera0/detection/people_mask'))
+            remappings.append(('camera_0/mask/camera_info', '/camera0/color/camera_info'))
 
     return remappings
 
 
 def get_zed_remappings(mode: NvbloxMode) -> List[Tuple[str, str]]:
-    assert mode is NvbloxMode.static, 'Nvblox only supports static mode for ZED cameras.'
     remappings = []
     remappings.append(('camera_0/depth/image', '/zed/zed_node/depth/depth_registered'))
     remappings.append(('camera_0/depth/camera_info', '/zed/zed_node/depth/camera_info'))
-    remappings.append(('camera_0/color/image', '/zed/zed_node/rgb/image_rect_color'))
-    remappings.append(('camera_0/color/camera_info', '/zed/zed_node/rgb/camera_info'))
     remappings.append(('pose', '/zed/zed_node/pose'))
+
+    if mode is NvbloxMode.people_segmentation:
+        remappings.append(('camera_0/color/image', '/zed/segmentation/image_resized'))
+        remappings.append(
+            ('camera_0/color/camera_info', '/zed/segmentation/camera_info_resized'))
+        remappings.append(('camera_0/mask/image', '/zed/segmentation/people_mask'))
+        remappings.append(
+            ('camera_0/mask/camera_info', '/zed/segmentation/camera_info_resized'))
+    else:
+        remappings.append(('camera_0/color/image', '/zed/zed_node/rgb/image_rect_color'))
+        remappings.append(('camera_0/color/camera_info', '/zed/zed_node/rgb/camera_info'))
+
+        if mode is NvbloxMode.people_detection:
+            remappings.append(('camera_0/mask/image', '/zed/detection/people_mask'))
+            remappings.append(('camera_0/mask/camera_info', '/zed/zed_node/rgb/camera_info'))
+
     return remappings
 
 
@@ -147,11 +147,12 @@ def add_nvblox(args: lu.ArgumentContainer) -> List[Action]:
         assert num_cameras <= 1 or mode is not NvbloxMode.people_segmentation, \
             'Can not run multiple cameras with people segmentation in Isaac Sim.'
     elif camera is NvbloxCamera.realsense:
-        remappings = get_realsense_remappings(mode, num_cameras)
+        remappings = get_realsense_remappings(mode)
         camera_config = realsense_config
         assert not use_lidar, 'Can not run lidar for realsense example.'
     elif camera is NvbloxCamera.multi_realsense:
-        remappings = get_realsense_remappings(mode, num_cameras)
+        remappings = get_realsense_remappings(mode)
+        num_cameras = 1
         camera_config = multi_realsense_config
         assert not use_lidar, 'Can not run lidar for multi realsense example.'
     elif camera in [NvbloxCamera.zed2, NvbloxCamera.zedx]:

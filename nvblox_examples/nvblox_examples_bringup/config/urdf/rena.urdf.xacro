@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+
+<robot name="rena_3_cameras">
+
+  <!-- Front Camera's Left IR as base_link -->
+  <link name="base_link"/>
+
+  <!-- Front Camera -->
+  <joint name="camera0" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera0_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="camera0_link"/>
+
+  <!-- Left Camera -->
+  <joint name="camera1" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera1_link"/>
+    <!-- D435 -->
+    <origin xyz="-0.085 0.09 0" rpy="0 0 ${pi/3}"/>
+  </joint>
+
+  <link name="camera1_link"/>
+
+  <!-- Right Camera -->
+  <joint name="camera2" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera2_link"/>
+    <origin xyz="-0.03 -0.135 0" rpy="0 0 -${pi/3}"/>
+  </joint>
+
+  <link name="camera2_link"/>
+
+</robot>

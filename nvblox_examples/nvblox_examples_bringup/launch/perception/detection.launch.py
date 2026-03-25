@@ -15,25 +15,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List
-
 from launch import Action, LaunchDescription
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 import isaac_ros_launch_utils as lu
 
 from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME, \
-    PEOPLENET_INPUT_IMAGE_WIDTH, PEOPLENET_INPUT_IMAGE_HEIGHT
+    SEMSEGNET_INPUT_IMAGE_WIDTH, SEMSEGNET_INPUT_IMAGE_HEIGHT
 
 
 def create_detection_pipeline(args: lu.ArgumentContainer,
                               namespace: str,
-                              input_topic: str) -> List[Action]:
+                              input_topic: str) -> Action:
 
     # People bbox detection based on Detectnet_v2
     # ONNX masks pixels within bounding boxes with area & confidence filtering
-    # Ops: Image2Tensor + TRT Node + UNet Decoder
-    #    - Resolution:  network_image_resolution
+    # Ops: Image2Tensor + NHWC->NCHW + TRT Node + UNet Decoder
+    #    - Resolution:  network_image_resolution (rsu_rs engine: 1x3x544x960 NCHW per trtexec)
 
     # TODO(xyao): add resize if input res != network res
     people_preprocessing_node = ComposableNode(
@@ -50,8 +48,24 @@ def create_detection_pipeline(args: lu.ArgumentContainer,
         }],
         remappings=[
             ('image', input_topic),
-            ('tensor', 'detection/tensor_input'),
+            ('tensor', 'detection/image_to_tensor_output'),
         ]
+    )
+    people_bchw_node = ComposableNode(
+        name='interleaved_to_planar_node',
+        package='isaac_ros_tensor_proc',
+        plugin='nvidia::isaac_ros::dnn_inference::InterleavedToPlanarNode',
+        namespace=namespace,
+        parameters=[
+            {
+                'input_tensor_shape': [args.network_image_height, args.network_image_width, 3],
+                'num_blocks': 1,
+            }
+        ],
+        remappings=[
+            ('interleaved_tensor', 'detection/image_to_tensor_output'),
+            ('planar_tensor', 'detection/tensor_input'),
+        ],
     )
 
     people_tensor_rt_node = ComposableNode(
@@ -63,8 +77,10 @@ def create_detection_pipeline(args: lu.ArgumentContainer,
             'engine_file_path': args.engine_file_path,
             'output_binding_names': args.output_binding_names,
             'output_tensor_names': args.output_tensor_names,
+            'output_tensor_formats': args.output_tensor_formats,
             'input_tensor_names': args.input_tensor_names,
             'input_binding_names': args.input_binding_names,
+            'input_tensor_formats': args.input_tensor_formats,
             'force_engine_update': args.force_engine_update,
             'verbose': args.verbose,
         }],
@@ -102,20 +118,26 @@ def create_detection_pipeline(args: lu.ArgumentContainer,
             executable='component_container_mt',
             arguments=['--ros-args', '--log-level', args.log_level],
             composable_node_descriptions=[
-                people_preprocessing_node, people_tensor_rt_node, people_decoder_node
+                people_preprocessing_node,
+                people_bchw_node,
+                people_tensor_rt_node,
+                people_decoder_node,
             ],
         )
     else:
         detection_node = lu.load_composable_nodes(
             args.container_name,
             [
-                people_preprocessing_node, people_tensor_rt_node, people_decoder_node
+                people_preprocessing_node,
+                people_bchw_node,
+                people_tensor_rt_node,
+                people_decoder_node,
             ],
         )
     return detection_node
 
 
-def add_detection(args: lu.ArgumentContainer) -> List[Action]:
+def add_detection(args: lu.ArgumentContainer) -> list[Action]:
     # For each camera input, launch a detection node.
     # It works for both unsync and HW-sync cameras.
     assert len(args.namespace_list) == len(args.input_topic_list), \
@@ -153,9 +175,10 @@ def generate_launch_description() -> LaunchDescription:
 
     # UNet decoder mask parameters
     # mask will be the same resolution as input image
-    args.add_arg('network_image_width', PEOPLENET_INPUT_IMAGE_WIDTH,
+    # Default matches rsu_rs_*_mask TRT engine (trtexec: input_1:0 = 1x3x544x960)
+    args.add_arg('network_image_width', SEMSEGNET_INPUT_IMAGE_WIDTH,
                  description='Number of columns for network input tensor image')
-    args.add_arg('network_image_height', PEOPLENET_INPUT_IMAGE_HEIGHT,
+    args.add_arg('network_image_height', SEMSEGNET_INPUT_IMAGE_HEIGHT,
                  description='Number of rows for network input tensor image')
     # TRT Node parameters
     args.add_arg('verbose', 'False',
@@ -166,18 +189,25 @@ def generate_launch_description() -> LaunchDescription:
                  lu.get_isaac_ros_ws_path() +
                  '/isaac_ros_assets/models/peoplenet/rsu_rs_480_640_mask/1/model.plan',
                  description='Full path to detection model TRT engine')
-    args.add_arg('input_binding_names', '["preprocess/input_1:0"]',
+    # TensorRT 10+ names from trtexec on rsu_rs_480_640_mask/1/model.plan
+    args.add_arg('input_binding_names', '["input_1:0"]',
                  description='List of TRT input tensor binding names')
     args.add_arg('input_tensor_names', '["input_tensor"]',
                  description='List of TRT input tensor names')
     args.add_arg('input_tensor_formats', '["nitros_tensor_list_nchw_rgb_f32"]',
                  description='List of TRT input tensor nitros type formats')
-    args.add_arg('output_tensor_names', '["people_mask"]',
-                 description='List of TRT output tensor names')
-    args.add_arg('output_binding_names', '["postprocess/people_mask"]',
-                 description='List of TRT output tensor binding names')
-    args.add_arg('output_tensor_formats', '["nitros_tensor_list_nhwc_rgb_f32"]',
-                 description='List of TRT output tensor nitros type formats')
+    args.add_arg(
+        'output_tensor_names',
+        '["output_cov", "output_bbox"]',
+        description='List of TRT output tensor names (cov then bbox)')
+    args.add_arg(
+        'output_binding_names',
+        '["output_cov/Sigmoid:0", "output_bbox/BiasAdd:0"]',
+        description='List of TRT output tensor binding names')
+    args.add_arg(
+        'output_tensor_formats',
+        '["nitros_tensor_list_nhwc_rgb_f32", "nitros_tensor_list_nhwc_rgb_f32"]',
+        description='List of TRT output tensor nitros type formats')
 
     # Additional arguments
     args.add_arg('container_name', NVBLOX_CONTAINER_NAME,

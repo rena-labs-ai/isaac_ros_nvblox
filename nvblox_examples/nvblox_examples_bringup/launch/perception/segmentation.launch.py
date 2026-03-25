@@ -40,7 +40,8 @@ def create_segmentation_pipeline(args: lu.ArgumentContainer,
         input_binding_names = ['input_1:0']
     elif people_segmentation is NvbloxPeopleSegmentation.peoplesemsegnet_shuffleseg:
         engine_file_path = args.shuffleseg_engine_file_path
-        input_binding_names = ['input_2']
+        # TensorRT 10+ uses profile-qualified names (see trtexec: input_2:0, 1x3xHxW NCHW)
+        input_binding_names = ['input_2:0']
     else:
         raise Exception(f'People segmentation mode {people_segmentation} not implemented.')
 
@@ -48,7 +49,7 @@ def create_segmentation_pipeline(args: lu.ArgumentContainer,
     # 1) Input Padding / Cropping:
     #    - Input Resolution:  input_image_resolution
     #    - Output Resolution: network_image_resolution
-    # 2) Image2Tensor + Swap axis (Vanilla) / Image2Tensor(ShuffleSeg) + TRT Node + Unet Decoder
+    # 2) Image2Tensor + NHWC->NCHW + TRT Node + Unet Decoder
     #    - Resolution:        network_image_resolution
     # 1) Output Padding / Cropping:
     #    - Input Resolution:  network_image_resolution
@@ -73,59 +74,39 @@ def create_segmentation_pipeline(args: lu.ArgumentContainer,
         ]
     )
 
-    # Only needs VideoBuffer2Tensor conversion, other pre-processing ops are in ONNX
-    if people_segmentation is NvbloxPeopleSegmentation.peoplesemsegnet_shuffleseg:
-        people_preprocessing_node = ComposableNode(
-            name='image_to_tensor_node',
-            package='isaac_ros_tensor_proc',
-            plugin='nvidia::isaac_ros::dnn_inference::ImageToTensorNode',
-            namespace=namespace,
-            parameters=[{
-                'scale': True,
-                # First tensor belongs to image
-                'tensor_name': args.input_tensor_names[0],
-            }],
-            remappings=[
-                ('image', output_resized_image_topic),
-                ('tensor', 'segmentation/tensor_input'),
-            ]
-        )
-    # people_segmentation shall only be either vanilla or shuffleseg, exception shall be caught
-    # in the start of thisfunction
-    else:
-        # DnnImageEncoderNode duplicates output twice on RealSense live
-        people_preprocessing_node = ComposableNode(
-            name='image_to_tensor_node',
-            package='isaac_ros_tensor_proc',
-            plugin='nvidia::isaac_ros::dnn_inference::ImageToTensorNode',
-            namespace=namespace,
-            parameters=[{
-                'scale': True,
-                # First tensor belongs to image
-                'tensor_name': args.input_tensor_names[0],
-            }],
-            remappings=[
-                ('image', output_resized_image_topic),
-                ('tensor', 'segmentation/image_to_tensor_output'),
-            ]
-        )
-        # NHWC -> NCHW
-        people_bchw_node = ComposableNode(
-            name='interleaved_to_planar_node',
-            package='isaac_ros_tensor_proc',
-            plugin='nvidia::isaac_ros::dnn_inference::InterleavedToPlanarNode',
-            namespace=namespace,
-            parameters=[
-                {
-                    'input_tensor_shape': [args.network_image_height, args.network_image_width, 3],
-                    'num_blocks': 40,
-                }
-            ],
-            remappings=[
-                ('interleaved_tensor', 'segmentation/image_to_tensor_output'),
-                ('planar_tensor', 'segmentation/tensor_input')
-            ],
-        )
+    # DnnImageEncoderNode duplicates output twice on RealSense live
+    people_preprocessing_node = ComposableNode(
+        name='image_to_tensor_node',
+        package='isaac_ros_tensor_proc',
+        plugin='nvidia::isaac_ros::dnn_inference::ImageToTensorNode',
+        namespace=namespace,
+        parameters=[{
+            'scale': True,
+            # First tensor belongs to image
+            'tensor_name': args.input_tensor_names[0],
+        }],
+        remappings=[
+            ('image', output_resized_image_topic),
+            ('tensor', 'segmentation/image_to_tensor_output'),
+        ]
+    )
+    # NHWC -> NCHW (shuffleseg TRT engines expect input_2:0 as 1x3xHxW per trtexec)
+    people_bchw_node = ComposableNode(
+        name='interleaved_to_planar_node',
+        package='isaac_ros_tensor_proc',
+        plugin='nvidia::isaac_ros::dnn_inference::InterleavedToPlanarNode',
+        namespace=namespace,
+        parameters=[
+            {
+                'input_tensor_shape': [args.network_image_height, args.network_image_width, 3],
+                'num_blocks': 40,
+            }
+        ],
+        remappings=[
+            ('interleaved_tensor', 'segmentation/image_to_tensor_output'),
+            ('planar_tensor', 'segmentation/tensor_input')
+        ],
+    )
 
     people_tensor_rt_node = ComposableNode(
         name='people_trt_node',
@@ -171,10 +152,12 @@ def create_segmentation_pipeline(args: lu.ArgumentContainer,
         ]
     )
     nodes_list = [
-        resize_node, people_preprocessing_node, people_tensor_rt_node, people_decoder_node
+        resize_node,
+        people_preprocessing_node,
+        people_bchw_node,
+        people_tensor_rt_node,
+        people_decoder_node,
     ]
-    if people_segmentation is NvbloxPeopleSegmentation.peoplesemsegnet_vanilla:
-        nodes_list.append(people_bchw_node)
 
     if args.one_container_per_camera:
         segmentation_node = ComposableNodeContainer(

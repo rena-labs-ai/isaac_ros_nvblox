@@ -29,16 +29,9 @@ EMITTER_ON_CONFIG_FILE_PATH = lu.get_path(
     'nvblox_examples_bringup',
     'config/sensors/realsense_emitter_on.yaml')
 
-# By default our behaviour is:
-# - Run the splitter on camera0,
-# - Don't run the splitter on the remaining cameras.
-# NOTE(alexmillane, 16.08.2024): At the moment this is the *only* behaviour we support.
-
 
 def get_default_run_splitter_list(num_cameras: int) -> List[bool]:
-    run_splitter_list = [False] * num_cameras
-    run_splitter_list[0] = True
-    return run_splitter_list
+    return [True] + [False] * (num_cameras - 1)
 
 
 def get_camera_node(
@@ -83,54 +76,49 @@ def get_splitter_node(camera_name: str) -> ComposableNode:
 
 
 def add_cameras(args: lu.ArgumentContainer) -> List[Action]:
-    """Adds a camera and (optional) realsense splitter for each camera up to num_cameras."""
+    """Adds camera drivers and/or splitters for each camera up to num_cameras."""
 
-    # Serial numbers.
+    num_cameras = int(args.num_cameras)
+    run_driver = lu.is_true(args.run_driver)
+
+    # Serial numbers (only needed when running the driver).
     if args.camera_serial_numbers == '':
-        camera_serial_numbers = [None]
+        camera_serial_numbers = [None] * num_cameras
     else:
         camera_serial_numbers = str(args.camera_serial_numbers).split(',')
-    assert len(camera_serial_numbers) > 0
-    # Run splitter list. I.e. a list of bools indicating per-camera if we should run a splitter.
-    run_splitter_list = get_default_run_splitter_list(len(camera_serial_numbers))
-    assert len(camera_serial_numbers) == len(run_splitter_list)
-    # Number of cameras to run
-    num_cameras = int(args.num_cameras)
-    assert num_cameras <= len(camera_serial_numbers)
+    assert len(camera_serial_numbers) >= num_cameras
+
+    run_splitter_list = get_default_run_splitter_list(num_cameras)
 
     actions = []
     for idx in range(num_cameras):
-        camera_serial_number = camera_serial_numbers[idx]
         run_splitter = run_splitter_list[idx]
-        nodes = []
         camera_name = f'camera{idx}'
-        # Config file
-        if run_splitter:
-            config_file_path = EMITTER_FLASHING_CONFIG_FILE_PATH
-        else:
-            config_file_path = EMITTER_ON_CONFIG_FILE_PATH
-        # Realsense
-        log_message = lu.log_info(
-            f'Starting realsense with name: {camera_name}, running splitter: {run_splitter}')
-        nodes.append(
-            get_camera_node(
-                camera_name=camera_name,
-                config_file_path=config_file_path,
-                serial_number=camera_serial_number,
-            ))
-        # Splitter
-        if run_splitter:
-            nodes.append(
-                get_splitter_node(
+
+        driver_nodes = []
+        splitter_nodes = []
+
+        if run_driver:
+            config_file_path = (EMITTER_FLASHING_CONFIG_FILE_PATH if run_splitter
+                                else EMITTER_ON_CONFIG_FILE_PATH)
+            driver_nodes.append(
+                get_camera_node(
                     camera_name=camera_name,
+                    config_file_path=config_file_path,
+                    serial_number=camera_serial_numbers[idx],
                 ))
-        # Note(xinjieyao: 2024/08/24): Multi-rs launch use RealSenseNodeFactory could be unstable
-        # Camera node may fail to launch without any ERROR or app crashes
-        # Adding delay for cameras after the first camera bringup (including splitter) as temp fix
-        actions.append(
-            TimerAction(
-                period=idx * 10.0, actions=[lu.load_composable_nodes(args.container_name, nodes)]))
-        actions.append(log_message)
+
+        if run_splitter:
+            splitter_nodes.append(get_splitter_node(camera_name=camera_name))
+
+        nodes = driver_nodes + splitter_nodes
+        if nodes:
+            actions.append(lu.log_info(
+                f'Starting camera {camera_name}: driver={run_driver}, splitter={run_splitter}'))
+            actions.append(
+                TimerAction(
+                    period=idx * 10.0,
+                    actions=[lu.load_composable_nodes(args.container_name, nodes)]))
 
     return actions
 
@@ -139,10 +127,11 @@ def generate_launch_description() -> LaunchDescription:
     args = lu.ArgumentContainer()
     args.add_arg('container_name', NVBLOX_CONTAINER_NAME)
     args.add_arg('run_standalone', 'False')
+    args.add_arg('run_driver', 'True',
+                 description='Launch RealSense drivers. Set False when drivers run externally.')
     args.add_arg('camera_serial_numbers', '')
     args.add_arg('num_cameras', 1)
 
-    # Adding the cameras
     args.add_opaque_function(add_cameras)
     actions = args.get_launch_actions()
     actions.append(
