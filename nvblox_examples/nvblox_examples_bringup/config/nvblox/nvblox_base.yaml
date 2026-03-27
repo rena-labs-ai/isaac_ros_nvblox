@@ -73,10 +73,10 @@
       do_depth_preprocessing: false
       depth_preprocessing_num_dilations: 3
       # projective integrator (tsdf/color/occupancy)
-      projective_integrator_max_integration_distance_m: 5.0
+      projective_integrator_max_integration_distance_m: 1.0 # was 5.0
       projective_integrator_truncation_distance_vox: 4.0
       projective_integrator_weighting_mode: "inverse_square_tsdf_distance_penalty"
-      projective_integrator_max_weight: 5.0
+      projective_integrator_max_weight: 1.0 # was 5.0
       projective_tsdf_integrator_invalid_depth_decay_factor: -1.0
       # occupancy integrator
       free_region_occupancy_probability: 0.45

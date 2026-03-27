@@ -83,3 +83,30 @@ Given the front-left-right 3D-printed rig, one can use all three cameras for bot
 export ROS_DOMAIN_ID=42
 ros2 launch nvblox_examples_bringup realsense_example.launch.py slam:=cuvslam num_cameras:=3 camera_serial_numbers:=<front_camera_serial_number>,<left_camera_serial_number>,<right_camera_serial_number> run_realsense:=True navigation:=True
 ```
+
+## People Mode
+
+To handle dynamic objects, one can launch in people_segmentaion mode. To do so:
+
+```bash
+# download model
+ngc registry model download-version "nvidia/tao/peoplesemsegnet:deployable_quantized_vanilla_unet_onnx_v2.0"
+
+# derive .plan model
+mkdir -p /home/grayfloyd/dev/isaac_ros-dev/isaac_ros_assets/models/peoplesemsegnet/deployable_quantized_vanilla_unet_onnx_v2.0/1
+trtexec \
+  --onnx=/home/grayfloyd/dev/isaac_ros-dev/isaac_ros_assets/models/peoplesemsegnet/deployable_quantized_vanilla_unet_onnx_v2.0/peoplesemsegnet_vanilla_unet_dynamic_etlt_int8_fp16.onnx \
+  --saveEngine=/home/grayfloyd/dev/isaac_ros-dev/isaac_ros_assets/models/peoplesemsegnet/deployable_quantized_vanilla_unet_onnx_v2.0/1/model.plan \
+  --minShapes=‘input_1:0:1x3x544x960’ \
+  --optShapes=‘input_1:0:1x3x544x960’ \
+  --maxShapes=‘input_1:0:1x3x544x960’ \
+  --fp16 \
+  --verbose
+
+# run cuvslam (from PyCuVSLAM)
+ros2 launch pycuvslam_ros vslam.launch.py tracker:=ros_zed_stereo
+
+# launch nvblox
+ros2 launch nvblox_examples_bringup zed_example.launch.py mode:=people_segmentation people_segmentation:=peoplesemsegnet_vanilla navigation:=true zed_lighting:=low_light
+```
+

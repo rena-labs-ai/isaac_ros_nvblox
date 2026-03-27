@@ -190,7 +190,7 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: True
         cost_scaling_factor: 10.0
-        inflation_radius: 0.8
+        inflation_radius: 0.45
       nvblox_layer:
         plugin: "nvblox::nav2::NvbloxCostmapLayer"
         enabled: True
@@ -207,7 +207,7 @@ global_costmap:
       robot_base_frame: zed_base_link
       use_sim_time: False
       footprint: '[[0.185, 0.165], [0.185, -0.165], [-0.185, -0.165], [-0.185, 0.165]]'
-      resolution: 0.05
+      resolution: 0.01
       width: 60
       height: 60
       origin_x: -30.0
@@ -220,7 +220,7 @@ global_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: True
         cost_scaling_factor: 10.0
-        inflation_radius: 0.8
+        inflation_radius: 0.3
       nvblox_layer:
         plugin: "nvblox::nav2::NvbloxCostmapLayer"
         enabled: True

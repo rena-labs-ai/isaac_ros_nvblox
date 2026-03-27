@@ -68,7 +68,7 @@ def generate_launch_description() -> LaunchDescription:
     args.add_arg(
         'zed_lighting',
         'default',
-        description='default: zed_common + zed2. low_light: append zed2_low_light.yaml (see cuVSLAM TROUBLESHOOTING).')
+        description='default | low_light (see config/sensors/zed2_low_light.yaml).')
     args.add_opaque_function(add_zed_camera)
 
     xacro_path = lu.get_path('zed_wrapper', 'urdf/zed_descr.urdf.xacro')

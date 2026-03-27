@@ -76,6 +76,8 @@ def get_zed_remappings(mode: NvbloxMode) -> List[Tuple[str, str]]:
     remappings.append(('camera_0/depth/camera_info', '/zed/zed_node/depth/camera_info'))
     remappings.append(('pose', '/zed/zed_node/pose'))
 
+    color_rgb = '/zed/zed_node/rgb/color/rect/image'
+
     if mode is NvbloxMode.people_segmentation:
         remappings.append(('camera_0/color/image', '/zed/segmentation/image_resized'))
         remappings.append(
@@ -84,12 +86,14 @@ def get_zed_remappings(mode: NvbloxMode) -> List[Tuple[str, str]]:
         remappings.append(
             ('camera_0/mask/camera_info', '/zed/segmentation/camera_info_resized'))
     else:
-        remappings.append(('camera_0/color/image', '/zed/zed_node/rgb/image_rect_color'))
-        remappings.append(('camera_0/color/camera_info', '/zed/zed_node/rgb/camera_info'))
+        remappings.append(('camera_0/color/image', color_rgb))
+        remappings.append(
+            ('camera_0/color/camera_info', '/zed/zed_node/rgb/color/rect/image/camera_info'))
 
         if mode is NvbloxMode.people_detection:
             remappings.append(('camera_0/mask/image', '/zed/detection/people_mask'))
-            remappings.append(('camera_0/mask/camera_info', '/zed/zed_node/rgb/camera_info'))
+            remappings.append(
+                ('camera_0/mask/camera_info', '/zed/zed_node/rgb/color/rect/image/camera_info'))
 
     return remappings
 

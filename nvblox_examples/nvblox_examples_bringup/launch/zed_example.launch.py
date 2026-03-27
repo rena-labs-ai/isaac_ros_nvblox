@@ -23,6 +23,93 @@ from nvblox_ros_python_utils.nvblox_launch_utils import NvbloxMode, NvbloxCamera
 ZED_EXAMPLE_CAMERA = str(NvbloxCamera.zed2)
 from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
+def _setup_perception(context):
+    lc = context.launch_configurations
+    mode = lc.get('mode', str(NvbloxMode.static))
+    mode_str = str(mode)
+    zed_ns = 'zed'
+    base_zed_rgb = f'/{zed_ns}/zed_node/rgb/color/rect/image'
+
+    camera_namespaces = [zed_ns]
+    input_camera_info_topics = [f'/{zed_ns}/zed_node/rgb/color/rect/image/camera_info']
+    output_resized_image_topics = [f'/{zed_ns}/segmentation/image_resized']
+    output_resized_camera_info_topics = [f'/{zed_ns}/segmentation/camera_info_resized']
+    output_detection_resized_image_topics = [f'/{zed_ns}/detection/image_resized']
+    output_detection_resized_camera_info_topics = [
+        f'/{zed_ns}/detection/camera_info_resized']
+
+    out = []
+
+    if str(NvbloxMode.people_segmentation) in mode_str:
+        # BGRA to RGB8 bridge (people_segmentation needs rgb8)
+        zed_rgb8 = f'{base_zed_rgb}/rgb8'
+        out.append(
+            lu.load_composable_nodes(
+                NVBLOX_CONTAINER_NAME,
+                [
+                    ComposableNode(
+                        package='isaac_ros_image_proc',
+                        plugin='nvidia::isaac_ros::image_proc::ImageFormatConverterNode',
+                        name='zed_rgb8_segmentation_bridge',
+                        parameters=[{
+                            'encoding_desired': 'rgb8',
+                            'image_width': int(lc.get('zed_seg_rgb8_width', '640')),
+                            'image_height': int(lc.get('zed_seg_rgb8_height', '360')),
+                        }],
+                        remappings=[
+                            ('image_raw', base_zed_rgb),
+                            ('image', zed_rgb8),
+                        ],
+                    ),
+                ],
+            ))
+        out.append(
+            lu.include(
+                'nvblox_examples_bringup',
+                'launch/perception/segmentation.launch.py',
+                launch_arguments={
+                    'container_name': NVBLOX_CONTAINER_NAME,
+                    'people_segmentation': lc.get(
+                        'people_segmentation',
+                        str(NvbloxPeopleSegmentation.peoplesemsegnet_vanilla)),
+                    'namespace_list': camera_namespaces,
+                    'input_topic_list': [zed_rgb8],
+                    'input_camera_info_topic_list': input_camera_info_topics,
+                    'output_resized_image_topic_list': output_resized_image_topics,
+                    'output_resized_camera_info_topic_list': output_resized_camera_info_topics,
+                    'num_cameras': '1',
+                    'one_container_per_camera': 'False',
+                }))
+
+    if str(NvbloxMode.people_detection) in mode_str:
+        out.append(
+            lu.include(
+                'nvblox_examples_bringup',
+                'launch/perception/detection.launch.py',
+                launch_arguments={
+                    'namespace_list': camera_namespaces,
+                    'input_topic_list': [base_zed_rgb],
+                    'input_camera_info_topic_list': input_camera_info_topics,
+                    'output_resized_image_topic_list': output_detection_resized_image_topics,
+                    'output_resized_camera_info_topic_list':
+                        output_detection_resized_camera_info_topics,
+                    'num_cameras': '1',
+                    'container_name': NVBLOX_CONTAINER_NAME,
+                    'one_container_per_camera': 'False',
+                }))
+
+    nvblox_args = {
+        'container_name': NVBLOX_CONTAINER_NAME,
+        'mode': mode,
+        'camera': ZED_EXAMPLE_CAMERA,
+    }
+    out.append(
+        lu.include(
+            'nvblox_examples_bringup',
+            'launch/perception/nvblox.launch.py',
+            launch_arguments=nvblox_args,
+        ))
+    return out
 
 def generate_launch_description() -> LaunchDescription:
     args = lu.ArgumentContainer()
@@ -65,17 +152,25 @@ def generate_launch_description() -> LaunchDescription:
         'zed_lighting',
         'default',
         choices=['default', 'low_light'],
-        description='ZED: default = zed_common + zed2 only (no overlay). low_light = zed2_low_light.yaml '
-        '(cuVSLAM-oriented: 30 FPS, ISP tune + denoising; see TROUBLESHOOTING.md).',
+        description='ZED: default = zed_common + zed2. low_light = zed2_low_light.yaml overlay.',
+        cli=True)
+    args.add_arg(
+        'zed_seg_rgb8_width',
+        '640',
+        description='ZED rect RGB width for people_segmentation BGRA→rgb8 bridge (match zed_common output).',
+        cli=True)
+    args.add_arg(
+        'zed_seg_rgb8_height',
+        '360',
+        description='ZED rect RGB height for people_segmentation BGRA→rgb8 bridge (match zed_common output).',
         cli=True)
     actions = args.get_launch_actions()
 
-    # Globally set use_sim_time if we're running from bag or sim
+    # Globally set use_sim_time
     actions.append(
         SetParameter('use_sim_time', True, condition=IfCondition(lu.is_valid(args.rosbag))))
 
-    # Navigation (same stack as: ros2 launch ... nvblox_carter_navigation.launch.py mode:=static nav_config:=zed_nav2.yaml)
-    # NOTE: must run before the nvblox component container; loads Nav2 params globally.
+    # Navigation
     actions.append(
         lu.include(
             'nvblox_examples_bringup',
@@ -87,8 +182,7 @@ def generate_launch_description() -> LaunchDescription:
             },
             condition=IfCondition(lu.is_true(args.navigation))))
 
-    # Robot center (Nav2 base) vs ZED odom frame: camera is 0.15 m behind and 0.08 m left of chassis center
-    # (zed_camera_link: x forward, y left). Publishes zed_camera_link -> zed_base_link for zed_nav2.yaml.
+    # zed_base_link (robot center) wrt. zed_camera_link (camera position)
     actions.append(
         Node(
             package='tf2_ros',
@@ -123,7 +217,6 @@ def generate_launch_description() -> LaunchDescription:
             },
             condition=UnlessCondition(lu.is_valid(args.rosbag))))
 
-    # FAST-LIO (external): bridge /Odometry to TF odom -> zed_camera_link (Realsense uses camera0_link via fast_lio.launch.py defaults).
     actions.append(
         lu.include(
             'nvblox_examples_bringup',
@@ -133,73 +226,21 @@ def generate_launch_description() -> LaunchDescription:
             },
             condition=IfCondition(lu.is_equal(args.slam, 'fast_lio'))))
 
-    # ZED topics use namespace `zed` (see launch/sensors/zed.launch.py).
-    zed_ns = 'zed'
-    camera_namespaces = [zed_ns]
-    camera_input_topics = [f'/{zed_ns}/zed_node/rgb/image_rect_color']
-    input_camera_info_topics = [f'/{zed_ns}/zed_node/rgb/camera_info']
-    output_resized_image_topics = [f'/{zed_ns}/segmentation/image_resized']
-    output_resized_camera_info_topics = [f'/{zed_ns}/segmentation/camera_info_resized']
+    actions.append(OpaqueFunction(function=_setup_perception))
 
-    # People segmentation
+    actions.append(
+        lu.play_rosbag(
+            bag_path=args.rosbag,
+            additional_bag_play_args=args.rosbag_args,
+            condition=IfCondition(lu.is_valid(args.rosbag))))
+
     actions.append(
         lu.include(
             'nvblox_examples_bringup',
-            'launch/perception/segmentation.launch.py',
+            'launch/visualization/visualization.launch.py',
             launch_arguments={
-                'container_name': NVBLOX_CONTAINER_NAME,
-                'people_segmentation': args.people_segmentation,
-                'namespace_list': camera_namespaces,
-                'input_topic_list': camera_input_topics,
-                'input_camera_info_topic_list': input_camera_info_topics,
-                'output_resized_image_topic_list': output_resized_image_topics,
-                'output_resized_camera_info_topic_list': output_resized_camera_info_topics,
-                'num_cameras': '1',
-                'one_container_per_camera': 'False',
-            },
-            condition=IfCondition(lu.has_substring(args.mode, str(NvbloxMode.people_segmentation)))))
-
-    # People detection
-    actions.append(
-        lu.include(
-            'nvblox_examples_bringup',
-            'launch/perception/detection.launch.py',
-            launch_arguments={
-                'namespace_list': camera_namespaces,
-                'input_topic_list': camera_input_topics,
-                'num_cameras': '1',
-                'container_name': NVBLOX_CONTAINER_NAME,
-                'one_container_per_camera': 'False',
-            },
-            condition=IfCondition(lu.has_substring(args.mode, str(NvbloxMode.people_detection)))))
-
-    # Nvblox
-    actions.append(
-        lu.include(
-            'nvblox_examples_bringup',
-            'launch/perception/nvblox.launch.py',
-            launch_arguments={
-                'container_name': NVBLOX_CONTAINER_NAME,
                 'mode': args.mode,
                 'camera': ZED_EXAMPLE_CAMERA,
-            },
-        ))
-
-    # # Play ros2bag
-    # actions.append(
-    #     lu.play_rosbag(
-    #         bag_path=args.rosbag,
-    #         additional_bag_play_args=args.rosbag_args,
-    #         condition=IfCondition(lu.is_valid(args.rosbag))))
-
-    # # Visualization
-    # actions.append(
-    #     lu.include(
-    #         'nvblox_examples_bringup',
-    #         'launch/visualization/visualization.launch.py',
-    #         launch_arguments={
-    #             'mode': args.mode,
-    #             'camera': ZED_EXAMPLE_CAMERA,
-    #         }))
+            }))
 
     return LaunchDescription(actions)
