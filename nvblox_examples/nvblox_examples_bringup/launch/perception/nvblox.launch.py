@@ -161,6 +161,18 @@ def add_nvblox(args: lu.ArgumentContainer) -> List[Action]:
         assert not use_lidar, 'Can not run lidar for multi realsense example.'
     elif camera in [NvbloxCamera.zed2, NvbloxCamera.zedx]:
         remappings = get_zed_remappings(mode)
+        zed_depth_override = str(args.zed_depth_image_topic).strip()
+        zed_color_override = str(args.zed_color_image_topic).strip()
+        if zed_depth_override or zed_color_override:
+            new_remappings = []
+            for a, b in remappings:
+                if a == 'camera_0/depth/image' and zed_depth_override:
+                    new_remappings.append((a, zed_depth_override))
+                elif a == 'camera_0/color/image' and zed_color_override:
+                    new_remappings.append((a, zed_color_override))
+                else:
+                    new_remappings.append((a, b))
+            remappings = new_remappings
         camera_config = zed_config
         assert num_cameras == 1, 'Zed example can only run with 1 camera.'
         assert not use_lidar, 'Can not run lidar for zed example.'
@@ -216,6 +228,16 @@ def generate_launch_description() -> LaunchDescription:
         'use_lidar_motion_compensation',
         '',
         description='Enable lidar motion compensation (empty string means use config default).')
+    args.add_arg(
+        'zed_depth_image_topic',
+        '',
+        description='If non-empty, nvblox subscribes here for ZED depth (e.g. locally decompressed topic).',
+    )
+    args.add_arg(
+        'zed_color_image_topic',
+        '',
+        description='If non-empty, nvblox subscribes here for ZED color (e.g. locally decompressed topic).',
+    )
 
     args.add_opaque_function(add_nvblox)
     return LaunchDescription(args.get_launch_actions())

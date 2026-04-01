@@ -39,6 +39,10 @@
 
   <!-- Utils -->
   <exec_depend>image_transport</exec_depend>
+  <exec_depend>compressed_depth_image_transport</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>isaac_ros_image_proc</exec_depend>
   <exec_depend>isaac_ros_launch_utils</exec_depend>
   <exec_depend>nvblox_ros_python_utils</exec_depend>

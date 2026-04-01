@@ -25,7 +25,9 @@
             gamma: 8
             # Prerequisite — sharp images for feature stability
             sharpness: 5
-            auto_exposure_gain: true
+            auto_exposure_gain: false
+            exposure: 50
+            gain: 100
             auto_whitebalance: true
             # whitebalance_temperature: 29
             # Step 5 / 8 — SDK ISP denoising [0–100]; parallel to Odometry.Config.use_denoising in cuVSLAM

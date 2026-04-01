@@ -4,24 +4,17 @@
 ---
 collision_monitor:
   ros__parameters:
-    enabled: True
+    enabled: False
     base_frame_id: "zed_base_link"
     odom_frame_id: "odom"
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "/cmd_vel"
-    observation_sources: ["pointcloud"]
-    pointcloud:
-      type: "pointcloud"
-      topic: "/zed/zed_node/point_cloud/cloud_registered"
-      min_height: 0.1
-      max_height: 1.5
-    polygons: ["SafeZone"]
-    SafeZone:
+    observation_sources: [""]
+    polygons: ["PassthroughZone"]
+    PassthroughZone:
       type: "circle"
-      radius: 0.15
-      action_type: "stop"
-      min_points: 4
-      enabled: True
+      radius: 0.0
+      action_type: "none"
 
 bt_navigator:
   ros__parameters:

@@ -28,6 +28,7 @@ install(DIRECTORY config launch
 install(PROGRAMS
   scripts/fast_lio_tf_bridge.py
   scripts/cmd_vel_relay.py
+  scripts/depth_compressed_to_raw.py
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

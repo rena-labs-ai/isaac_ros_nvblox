@@ -23,6 +23,15 @@ from nvblox_ros_python_utils.nvblox_launch_utils import NvbloxMode, NvbloxCamera
 ZED_EXAMPLE_CAMERA = str(NvbloxCamera.zed2)
 from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
+ZED_DEPTH_REGISTERED = '/zed/zed_node/depth/depth_registered'
+ZED_DEPTH_TOPIC_DECOMPRESSED = f'{ZED_DEPTH_REGISTERED}/decompressed'
+ZED_DEPTH_TOPIC_COMPRESSED = f'{ZED_DEPTH_REGISTERED}/compressedDepth'
+
+ZED_COLOR_BASE = '/zed/zed_node/rgb/color/rect/image'
+ZED_COLOR_COMPRESSED = f'{ZED_COLOR_BASE}/compressed'
+ZED_COLOR_DECOMPRESSED = f'{ZED_COLOR_BASE}/decompressed'
+
+
 def _setup_perception(context):
     lc = context.launch_configurations
     mode = lc.get('mode', str(NvbloxMode.static))
@@ -103,6 +112,9 @@ def _setup_perception(context):
         'mode': mode,
         'camera': ZED_EXAMPLE_CAMERA,
     }
+    if str(lc.get('use_compressed', 'false')).lower() == 'true':
+        nvblox_args['zed_depth_image_topic'] = ZED_DEPTH_TOPIC_DECOMPRESSED
+        nvblox_args['zed_color_image_topic'] = ZED_COLOR_DECOMPRESSED
     out.append(
         lu.include(
             'nvblox_examples_bringup',
@@ -164,6 +176,12 @@ def generate_launch_description() -> LaunchDescription:
         '360',
         description='ZED rect RGB height for people_segmentation BGRA→rgb8 bridge (match zed_common output).',
         cli=True)
+    args.add_arg(
+        'use_compressed',
+        False,
+        description='If true, subscribe to compressed depth and color from the network and '
+        'republish as raw locally for nvblox.',
+        cli=True)
     actions = args.get_launch_actions()
 
     # Globally set use_sim_time
@@ -207,15 +225,15 @@ def generate_launch_description() -> LaunchDescription:
     actions.append(lu.component_container(NVBLOX_CONTAINER_NAME, log_level=args.log_level))
 
     # ZED driver
-    actions.append(
-        lu.include(
-            'nvblox_examples_bringup',
-            'launch/sensors/zed.launch.py',
-            launch_arguments={
-                'container_name': NVBLOX_CONTAINER_NAME,
-                'zed_lighting': args.zed_lighting,
-            },
-            condition=UnlessCondition(lu.is_valid(args.rosbag))))
+    # actions.append(
+    #     lu.include(
+    #         'nvblox_examples_bringup',
+    #         'launch/sensors/zed.launch.py',
+    #         launch_arguments={
+    #             'container_name': NVBLOX_CONTAINER_NAME,
+    #             'zed_lighting': args.zed_lighting,
+    #         },
+    #         condition=UnlessCondition(lu.is_valid(args.rosbag))))
 
     actions.append(
         lu.include(
@@ -225,6 +243,32 @@ def generate_launch_description() -> LaunchDescription:
                 'child_frame': 'zed_camera_link',
             },
             condition=IfCondition(lu.is_equal(args.slam, 'fast_lio'))))
+
+    actions.append(
+        Node(
+            package='nvblox_examples_bringup',
+            executable='depth_compressed_to_raw.py',
+            name='zed_depth_decompress',
+            parameters=[{
+                'input_topic': ZED_DEPTH_TOPIC_COMPRESSED,
+                'output_topic': ZED_DEPTH_TOPIC_DECOMPRESSED,
+                'qos_preset': 'sensor_data',
+            }],
+            condition=IfCondition(lu.is_true(args.use_compressed)),
+        ))
+
+    actions.append(
+        Node(
+            package='image_transport',
+            executable='republish',
+            name='zed_color_decompress',
+            arguments=['compressed', 'raw'],
+            remappings=[
+                ('in/compressed', ZED_COLOR_COMPRESSED),
+                ('out', ZED_COLOR_DECOMPRESSED),
+            ],
+            condition=IfCondition(lu.is_true(args.use_compressed)),
+        ))
 
     actions.append(OpaqueFunction(function=_setup_perception))
 

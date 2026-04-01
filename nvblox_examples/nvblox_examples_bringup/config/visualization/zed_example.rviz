@@ -10,7 +10,6 @@ Panels:
         - /Nvblox1
         - /Sensors1
         - /Sensors1/Color Image1
-        - /Odometry1
       Splitter Ratio: 0.5896806120872498
     Tree Height: 1030
   - Class: rviz_common/Selection
@@ -36,27 +35,19 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        base_body_link:
-          Value: true
-        base_camera_bottom_screw_frame:
-          Value: true
-        base_camera_link:
-          Value: true
-        base_footprint:
-          Value: true
         base_link:
           Value: true
-        fl_wheel_link:
+        left_front_wheel_link:
           Value: true
-        imu_link:
-          Value: true
-        livox_frame:
+        left_rear_wheel_link:
           Value: true
         map:
           Value: true
         odom:
           Value: true
-        rr_wheel_link:
+        right_front_wheel_link:
+          Value: true
+        right_rear_wheel_link:
           Value: true
         zed_baro_link:
           Value: true
@@ -447,10 +438,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.8947965502738953
+      Pitch: 0.5547968745231628
       Target Frame: camera_link
       Value: Orbit (rviz)
-      Yaw: 3.8185579776763916
+      Yaw: 4.168557167053223
     Saved: ~
 Window Geometry:
   Color Image:
